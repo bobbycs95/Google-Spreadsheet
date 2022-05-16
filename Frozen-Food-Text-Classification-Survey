@@ -1,0 +1,164 @@
+import pandas as pd
+import numpy as np
+#for text pre-processing
+import re, string
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import SnowballStemmer
+from nltk.corpus import wordnet
+from nltk.stem import WordNetLemmatizer
+nltk.download('punkt')
+nltk.download('averaged_perceptron_tagger')
+nltk.download('wordnet')
+nltk.download('stopwords')
+#for model-building
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.metrics import classification_report, f1_score, accuracy_score, confusion_matrix
+from sklearn.metrics import roc_curve, auc, roc_auc_score
+# bag of words
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import CountVectorizer
+#for word embedding
+import gensim
+from gensim.models import Word2Vec
+from gensim.models import KeyedVectors
+
+
+sheet_url = "https://docs.google.com/spreadsheets/d/1hT316YKR-NSLCrQespLnDsucCM1CA3Gm6gQNrjuaZ_o/edit#gid=447748564"
+sheet_url_trf = sheet_url.replace('/edit#gid=', '/export?format=csv&gid=')
+df= pd.read_csv(sheet_url_trf) #Tarik data dari Google Sheet ke pandas
+df = df.drop(["Business Name","Product Category","Revenue per Month","Location with Most-Buyer","Common Problem with Online Business","Know about Fulfillment Center?","Location Preference for Fulfillment Center?","Consideration for NOT using Fulfillment Center"],axis=1)
+df_test = df.copy()
+df
+
+df["word_count"] = df["Consideration for using Fulfillment Center"].apply(lambda x: len(str(x).split()))
+def condition(x):
+    if x=="Mungkin akan menggunakan jasa fulfillment center":
+        return +1
+    elif x=="Sudah pasti akan menggunakan jasa fulfillment center":
+        return +1
+    else:
+        return -1
+df["Do you want to use Fulfillment Center?"] = df["Do you want to use Fulfillment Center?"].apply(condition)
+#df["Do you want to use Fulfillment Center?"].value_counts()
+df
+
+
+#convert to lowercase, strip and remove punctuations
+def preprocess(text):
+    text = text.lower() 
+    text=text.strip()  
+    text=re.compile('<.*?>').sub('', text) 
+    text = re.compile('[%s]' % re.escape(string.punctuation)).sub(' ', text)  
+    text = re.sub('\s+', ' ', text)  
+    text = re.sub(r'\[[0-9]*\]',' ',text) 
+    text=re.sub(r'[^\w\s]', '', str(text).lower().strip())
+    text = re.sub(r'\d',' ',text) 
+    text = re.sub(r'\s+',' ',text) 
+    return text
+
+ 
+# STOPWORD REMOVAL
+def stopword(string):
+    a= [i for i in string.split() if i not in stopwords.words("indonesian")]
+    return ' '.join(a)
+
+#LEMMATIZATION
+# Initialize the lemmatizer
+wl = WordNetLemmatizer()
+ 
+# This is a helper function to map NTLK position tags
+def get_wordnet_pos(tag):
+    if tag.startswith('J'):
+        return wordnet.ADJ
+    elif tag.startswith('V'):
+        return wordnet.VERB
+    elif tag.startswith('N'):
+        return wordnet.NOUN
+    elif tag.startswith('R'):
+        return wordnet.ADV
+    else:
+        return wordnet.NOUN
+# Tokenize the sentence
+def lemmatizer(string):
+    word_pos_tags = nltk.pos_tag(word_tokenize(string)) # Get position tags
+    a=[wl.lemmatize(tag[0], get_wordnet_pos(tag[1])) for idx, tag in enumerate(word_pos_tags)] # Map the position tag and lemmatize the word/token
+    return " ".join(a)
+    
+    def finalpreprocess(string):
+    return lemmatizer(stopword(preprocess(string)))
+df["Clean"] = df["Consideration for using Fulfillment Center"].apply(lambda x: finalpreprocess(x))
+df["Clean_word_count"] = df["Clean"].apply(lambda y: len(str(y).split()))
+
+df["Do you want to use Fulfillment Center?"] = df["Do you want to use Fulfillment Center?"].replace({-1 : 'No'})
+df["Do you want to use Fulfillment Center?"] = df["Do you want to use Fulfillment Center?"].replace({1 : 'Yes'})
+#df["Do you want to use Fulfillment Center?"].value_counts()
+df
+
+
+#SPLITTING THE TRAINING DATASET INTO TRAIN AND TEST
+X_train, X_test, y_train, y_test = train_test_split(df["Clean"],df["Do you want to use Fulfillment Center?"],test_size=0.2,shuffle=True)
+
+#Word2Vec
+# Word2Vec runs on tokenized sentences
+X_train_tok= [nltk.word_tokenize(i) for i in X_train]  
+X_test_tok= [nltk.word_tokenize(i) for i in X_test]
+
+from gensim import models
+from gensim.test.utils import common_texts
+from gensim.models import Word2Vec
+import gensim.models
+
+#Tf-Idf
+tfidf_vectorizer = TfidfVectorizer(use_idf=True)
+X_train_vectors_tfidf = tfidf_vectorizer.fit_transform(X_train) 
+X_test_vectors_tfidf = tfidf_vectorizer.transform(X_test)
+#building Word2Vec model
+class MeanEmbeddingVectorizer(object):
+    def __init__(self, word2vec):
+        self.word2vec = word2vec
+        # if a text is empty we should return a vector of zeros
+        # with the same dimensionality as all the other vectors
+        self.dim = len(next(iter(word2vec.values())))
+def fit(self, X, y):
+        return self
+def transform(self, X):
+        return np.array([
+            np.mean([self.word2vec[w] for w in words if w in self.word2vec]
+                    or [np.zeros(self.dim)], axis=0)
+            for words in X
+        ])
+
+
+df['clean_text_tok']=[nltk.word_tokenize(i) for i in df["Clean"]]
+model = Word2Vec(df['clean_text_tok'],min_count=1)    
+w2v = dict(zip(model.wv.index2word, model.wv.syn0)) 
+modelw = MeanEmbeddingVectorizer(w2v)
+
+
+#FITTING THE CLASSIFICATION MODEL using Logistic Regression(tf-idf)
+lr_tfidf=LogisticRegression(solver = 'liblinear', C=10, penalty = 'l2')
+lr_tfidf.fit(X_train_vectors_tfidf, y_train)  
+#Predict y value for test dataset
+y_predict = lr_tfidf.predict(X_test_vectors_tfidf)
+y_prob = lr_tfidf.predict_proba(X_test_vectors_tfidf)[:,1]
+print(classification_report(y_test,y_predict))
+print('Confusion Matrix:',confusion_matrix(y_test, y_predict))
+
+#Pre-processing the new dataset
+df_test["Clean"] = df_test["Consideration for using Fulfillment Center"].apply(lambda x: finalpreprocess(x)) #preprocess the data
+X_test=df_test["Clean"] 
+#converting words to numerical data using tf-idf
+X_vector=tfidf_vectorizer.transform(X_test)
+#use the best model to predict 'target' value for the new dataset 
+y_predict = lr_tfidf.predict(X_vector)      
+y_prob = lr_tfidf.predict_proba(X_vector)[:,1]
+df_test['predict_prob']= y_prob
+df_test["Do you want to use Fulfillment Center?"]= y_predict
+final=df_test[["Clean","Do you want to use Fulfillment Center?"]].reset_index(drop=True)
+final["Do you want to use Fulfillment Center?"].value_counts()
+#final
