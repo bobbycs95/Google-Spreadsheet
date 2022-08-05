@@ -3,7 +3,6 @@
 """
 Created on Thu Aug  4 15:40:58 2022
 
-@author: limaindonesia
 """
 import pandas as pd
 import numpy as np
