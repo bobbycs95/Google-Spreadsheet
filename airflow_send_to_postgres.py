@@ -2,8 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Mon Jul  4 11:17:50 2022
-
-@author: limaindonesia
 """
 
 import psycopg2
