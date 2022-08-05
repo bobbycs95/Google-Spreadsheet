@@ -166,4 +166,4 @@ df_test['predict_prob']= y_prob
 df_test["Do you want to use Fulfillment Center?"]= y_predict
 final=df_test[["Clean","Do you want to use Fulfillment Center?"]].reset_index(drop=True)
 final["Do you want to use Fulfillment Center?"].value_counts()
-#final
+#final 
