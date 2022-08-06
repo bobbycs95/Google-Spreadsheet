@@ -37,7 +37,8 @@ class State:
         self.s = "False"
         self.balance += amount
     print(f"Success = {self.s} {self.c} {self.balance}")
-
+    self.s = "True"
+    
 px = State("hacker",0)
 px.login()
 px.deposit(50)
